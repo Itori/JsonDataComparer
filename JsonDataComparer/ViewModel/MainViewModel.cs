@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using GalaSoft.MvvmLight;
 using GalaSoft.MvvmLight.CommandWpf;
@@ -26,6 +27,7 @@ namespace JsonDataComparer.ViewModel
         private string _comparisonRules = string.Empty;
 
         private string _welcomeTitle = string.Empty;
+        private bool _ignoreNullValues = true;
 
         /// <summary>
         /// Gets the WelcomeTitle property.
@@ -120,8 +122,18 @@ namespace JsonDataComparer.ViewModel
 
         public RelayCommand CompareCommand { get; }
 
+        public ObservableCollection<string> LogEntries { get; } = new ObservableCollection<string>();
+
+        public bool IgnoreNullValues
+        {
+            get => _ignoreNullValues;
+            set => Set(ref _ignoreNullValues, value);
+        }
+
         private void Compare()
         {
+            LogEntries.Clear();
+            
             var rules = new Dictionary<string, string>();
             var rulesStrings = ComparisonRules.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
             foreach (var ruleString in rulesStrings)
@@ -142,10 +154,11 @@ namespace JsonDataComparer.ViewModel
                     var json1 = JToken.ReadFrom(new JsonTextReader(reader));
                     var json2 = JToken.ReadFrom(new JsonTextReader(reader2));
 
-                    var comparer = new JTokenComparer(rules);
-                    comparer.Equals(json1, json2);
-
-
+                    var comparer = new JTokenComparer(rules, LogEntries, IgnoreNullValues);
+                    if(comparer.Equals(json1, json2))
+                        LogEntries.Add("Files are the same");
+                    else
+                        LogEntries.Add("Files are different");
                 }
             }
 

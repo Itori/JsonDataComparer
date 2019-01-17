@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text.RegularExpressions;
 using JsonDataComparer.Localization;
@@ -11,10 +12,14 @@ namespace JsonDataComparer.ViewModel
     public class JTokenComparer : IEqualityComparer<JToken>
     {
         private readonly Dictionary<string, string> _rules;
+        private readonly ObservableCollection<string> _logEntries;
+        private readonly bool _ignoreNullValues;
 
-        public JTokenComparer(Dictionary<string, string> rules)
+        public JTokenComparer(Dictionary<string, string> rules, ObservableCollection<string> logEntries, bool ignoreNullValues)
         {
             _rules = rules;
+            _logEntries = logEntries;
+            _ignoreNullValues = ignoreNullValues;
         }
 
         private void LogDiff(JToken token1, JToken token2)
@@ -29,7 +34,8 @@ namespace JsonDataComparer.ViewModel
 
         private void Log(string message, params object[] args)
         {
-            Console.WriteLine(message, args);
+            _logEntries.Add(string.Format(message, args));
+            //Console.WriteLine(message, args);
         }
 
         public bool Equals(JToken token1, JToken token2)
@@ -54,7 +60,7 @@ namespace JsonDataComparer.ViewModel
                     throw new NotImplementedException($"Type not implemented : {token1.GetType().FullName}");
             }
 
-            LogDiff(token1, token2);
+            //LogDiff(token1, token2);
             return false;
         }
 
@@ -80,7 +86,13 @@ namespace JsonDataComparer.ViewModel
                             return false;
                         }
 
-                        var id = ((JValue)object1.Property(key).Value).Value.ToString();
+                        var attribute1 = object1.Property(key);
+                        if (attribute1 == null)
+                        {
+                            Log($"Path {0} not found");
+                            return false;
+                        }
+                        var id = ((JValue)attribute1.Value).Value.ToString();
 
                         var object2 = t2.OfType<JObject>().FirstOrDefault(t =>
                         {
@@ -98,6 +110,9 @@ namespace JsonDataComparer.ViewModel
                             @equals = false;
                             LogDiff(object1, object2);
                         }
+
+                        if (object2 != null)
+                            t2.Remove(object2);
 
                         break;
 
@@ -118,6 +133,25 @@ namespace JsonDataComparer.ViewModel
                     default:
                         throw new NotImplementedException("Compare collections of something else then JObject");
                 }
+            }
+
+            if (t2.Count > 0)
+            {
+                foreach (var item in t2)
+                {
+                    switch (item)
+                    {
+                        case JProperty property:
+                            if (Equals(null, property))
+                                continue;
+                            break;
+                    }
+
+
+                    LogDiff(null, item);
+                }
+
+                equals = false;
             }
 
             return equals;
@@ -149,30 +183,68 @@ namespace JsonDataComparer.ViewModel
                 LogDiff(property1, property2);
             }
 
+            foreach (var property in properties2)
+            {
+                equal = false;
+                LogDiff(null, property);
+            }
+
 
             return equal;
         }
 
+        private bool Equals(JValue value1, JValue value2)
+        {
+            if (value1 != null && value2 != null)
+                return value1.Equals(value2);
+            if (value1 == null && value2 != null)
+            {
+                if (value2.Value == null && _ignoreNullValues)
+                    return true;
+            } else if (value1 != null)
+            {
+                if (value1.Value == null && _ignoreNullValues)
+                    return true;
+            }
+            else
+                return true;
+
+            return false;
+        }
+
         private bool Equals(JProperty property1, JProperty property2)
         {
-            switch (property1.Value)
+            if (property1 != null)
             {
-                case JValue value1 when property2.Value is JValue value2:
-                    if (value1.Equals(value2))
-                        return true;
-                    break;
-                case JContainer container1 when property2.Value is JContainer container2:
-                    if (Equals(container1, container2))
-                        return true;
+                switch (property1.Value)
+                {
+                    case JValue value1 when property2.Value is JValue value2:
+                        if (Equals(value1, value2))
+                            return true;
+                        break;
+                    case JContainer container1 when property2.Value is JContainer container2:
+                        if (Equals(container1, container2))
+                            return true;
 
-                    break;
+                        break;
 
-                //case JObject childObject1 when property2.Value is JObject childObject2:
-                //    if (Equals(childObject1, childObject2))
-                //        continue;
+                    //case JObject childObject1 when property2.Value is JObject childObject2:
+                    //    if (Equals(childObject1, childObject2))
+                    //        continue;
 
-                default:
-                    break;
+                    default:
+                        break;
+                }
+            }
+            else
+            {
+                switch (property2.Value)
+                {
+                    case JValue value2:
+                        return Equals(null, value2);
+                    case JContainer container2:
+                        return Equals(null, container2);
+                }
             }
 
             return false;
