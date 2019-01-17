@@ -92,13 +92,12 @@ namespace JsonDataComparer.ViewModel
                             Log($"Path {0} not found");
                             return false;
                         }
-                        var id = ((JValue)attribute1.Value).Value.ToString();
 
                         var object2 = t2.OfType<JObject>().FirstOrDefault(t =>
                         {
                             if (t.TryGetValue(key, out JToken id2))
                             {
-                                if (((JValue)id2).Value.ToString() == id)
+                                if (Equals(((JValue)attribute1.Value), (JValue)id2))
                                     return true;
                             }
 
