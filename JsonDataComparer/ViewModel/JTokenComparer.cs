@@ -147,11 +147,11 @@ namespace JsonDataComparer.ViewModel
                             break;
                     }
 
-
+                    equals = false;
                     LogDiff(null, item);
                 }
 
-                equals = false;
+                
             }
 
             return equals;
