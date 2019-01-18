@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
 using JsonDataComparer.Localization;
@@ -11,11 +12,11 @@ namespace JsonDataComparer.ViewModel
 {
     public class JTokenComparer : IEqualityComparer<JToken>
     {
-        private readonly Dictionary<string, string> _rules;
+        private readonly Dictionary<string, List<ComparisonRule>> _rules;
         private readonly ObservableCollection<string> _logEntries;
         private readonly bool _ignoreNullValues;
 
-        public JTokenComparer(Dictionary<string, string> rules, ObservableCollection<string> logEntries, bool ignoreNullValues)
+        public JTokenComparer(Dictionary<string, List<ComparisonRule>> rules, ObservableCollection<string> logEntries, bool ignoreNullValues)
         {
             _rules = rules;
             _logEntries = logEntries;
@@ -69,8 +70,23 @@ namespace JsonDataComparer.ViewModel
             if (container1 == container2)
                 return true;
 
-            var t1 = container1.Children().ToList();
-            var t2 = container2.Children().ToList();
+            var t1 = container1?.Children().ToList();
+            var t2 = container2?.Children().ToList();
+
+            if (t1 == null)
+            {
+                Debug.Assert(t2 != null, nameof(t2) + " != null");
+                if (t2.Count == 0)
+                    return true;
+                return false;
+            }
+            if (t2 == null)
+            {
+                Debug.Assert(t1 != null, nameof(t1) + " != null");
+                if (t1.Count == 0)
+                    return true;
+                return false;
+            }
 
             bool equals = true;
             for (int i = 0; i < t1.Count(); i++)
@@ -80,28 +96,41 @@ namespace JsonDataComparer.ViewModel
                 {
                     case JObject object1:
                         var path = Regex.Replace(token1.Path, "\\[[0-9]+\\]", "[]");
-                        if(!_rules.TryGetValue(path, out var key))
+                        if(!_rules.TryGetValue(path, out var comparisonRules))
                         {
                             Log("No Key found for Path {0}", path);
                             return false;
                         }
 
-                        var attribute1 = object1.Property(key);
-                        if (attribute1 == null)
+                        var keys = new HashSet<string>(comparisonRules.Where(c => !c.Ignore).Select(c => c.Name).Distinct());
+                        var properties1 = object1.Properties().Where(p => keys.Contains(p.Name)).ToList();
+                        if (!properties1.Any())
                         {
-                            Log($"Path {0} not found");
+                            Log($"Keys not found for Path {0}", path);
                             return false;
                         }
 
                         var object2 = t2.OfType<JObject>().FirstOrDefault(t =>
                         {
-                            if (t.TryGetValue(key, out JToken id2))
+                            var properties2 = t.Properties().Where(p => keys.Contains(p.Name)).ToList();
+
+                            foreach (var p1 in properties1)
                             {
-                                if (Equals(((JValue)attribute1.Value), (JValue)id2))
-                                    return true;
+                                var p2 = properties2.FirstOrDefault(p => p.Name == p1.Name);
+                                if (p2 != null)
+                                    properties2.Remove(p2);
+
+                                if (!Equals(p1, p2))
+                                    return false;
                             }
 
-                            return false;
+                            foreach (var p2 in properties2)
+                            {
+                                if (!Equals(null, p2))
+                                    return false;
+                            }
+
+                            return true;
                         });
 
                         if (!Equals(object1, object2))
@@ -183,17 +212,41 @@ namespace JsonDataComparer.ViewModel
             }
 
             foreach (var property in properties2)
-            {
-                equal = false;
-                LogDiff(null, property);
+            {                
+                if (!Equals(null, property))
+                {
+                    equal = false;
+                    LogDiff(null, property);
+                }
             }
 
 
             return equal;
         }
 
+        private bool IsIgnored(JToken token)
+        {
+            if (token == null)
+                return false;
+            var path = Regex.Replace(token.Path, "\\[[0-9]+\\]", "[]");
+
+            var indexDot = path.LastIndexOf('.');
+            var xpath = path.Substring(0, indexDot);
+            var key = path.Substring(indexDot + 1);
+
+            if (_rules.ContainsKey(xpath))
+            {
+                return _rules[xpath].Where(r => r.Ignore).Any(r => r.Name == key);
+            }
+
+            return false;
+        }
+
         private bool Equals(JValue value1, JValue value2)
         {
+            if (IsIgnored(value1) || IsIgnored(value2))
+                return true;
+
             if (value1 != null && value2 != null)
                 return value1.Equals(value2);
             if (value1 == null && value2 != null)

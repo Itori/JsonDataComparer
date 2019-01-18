@@ -134,17 +134,21 @@ namespace JsonDataComparer.ViewModel
         {
             LogEntries.Clear();
             
-            var rules = new Dictionary<string, string>();
+            var rules = new Dictionary<string, List<ComparisonRule>>();
             var rulesStrings = ComparisonRules.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
             foreach (var ruleString in rulesStrings)
             {
-                var indexDot = ruleString.LastIndexOf('.');
-                var xpath = ruleString.Substring(0, indexDot);
-                var key = ruleString.Substring(indexDot+1);
+                bool ignore = ruleString.StartsWith("-");
 
-                if (rules.ContainsKey(xpath))
-                    continue;
-                rules.Add(xpath, key);            
+                var indexDot = ruleString.LastIndexOf('.');
+                var delta = ignore ? 1 : 0;
+                var xpath = ruleString.Substring(delta, indexDot-delta);
+                var keys = ruleString.Substring(indexDot+1);
+
+                if (!rules.ContainsKey(xpath))
+                    rules.Add(xpath, new List<ComparisonRule>());
+                foreach (var key in keys.Split('|'))
+                    rules[xpath].Add(new ComparisonRule(key, ignore));
             }
 
             using (StreamReader reader = File.OpenText(File1Path))
