@@ -142,8 +142,18 @@ namespace JsonDataComparer.ViewModel
 
                 var indexDot = ruleString.LastIndexOf('.');
                 var delta = ignore ? 1 : 0;
-                var xpath = ruleString.Substring(delta, indexDot-delta);
-                var keys = ruleString.Substring(indexDot+1);
+                string xpath;
+                string keys;
+                if (indexDot > 0)
+                {
+                    xpath = ruleString.Substring(delta, indexDot - delta);
+                    keys = ruleString.Substring(indexDot + 1);
+                }
+                else
+                {
+                    xpath = ruleString.Substring(delta);
+                    keys = string.Empty;
+                }
 
                 if (!rules.ContainsKey(xpath))
                     rules.Add(xpath, new List<ComparisonRule>());
