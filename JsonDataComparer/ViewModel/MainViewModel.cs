@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Windows;
 using GalaSoft.MvvmLight;
 using GalaSoft.MvvmLight.CommandWpf;
 using GalaSoft.MvvmLight.Messaging;
@@ -132,48 +133,55 @@ namespace JsonDataComparer.ViewModel
 
         private void Compare()
         {
-            LogEntries.Clear();
+            try
+            {
+                LogEntries.Clear();
             
-            var rules = new Dictionary<string, List<ComparisonRule>>();
-            var rulesStrings = ComparisonRules.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (var ruleString in rulesStrings)
-            {
-                bool ignore = ruleString.StartsWith("-");
-
-                var indexDot = ruleString.LastIndexOf('.');
-                var delta = ignore ? 1 : 0;
-                string xpath;
-                string keys;
-                if (indexDot > 0)
+                var rules = new Dictionary<string, List<ComparisonRule>>();
+                var rulesStrings = ComparisonRules.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var ruleString in rulesStrings)
                 {
-                    xpath = ruleString.Substring(delta, indexDot - delta);
-                    keys = ruleString.Substring(indexDot + 1);
-                }
-                else
-                {
-                    xpath = ruleString.Substring(delta);
-                    keys = string.Empty;
-                }
+                    bool ignore = ruleString.StartsWith("-");
 
-                if (!rules.ContainsKey(xpath))
-                    rules.Add(xpath, new List<ComparisonRule>());
-                foreach (var key in keys.Split('|'))
-                    rules[xpath].Add(new ComparisonRule(key, ignore));
-            }
-
-            using (StreamReader reader = File.OpenText(File1Path))
-            {
-                using (StreamReader reader2 = File.OpenText(File2Path))
-                {
-                    var json1 = JToken.ReadFrom(new JsonTextReader(reader));
-                    var json2 = JToken.ReadFrom(new JsonTextReader(reader2));
-
-                    var comparer = new JTokenComparer(rules, LogEntries, IgnoreNullValues);
-                    if(comparer.Equals(json1, json2))
-                        LogEntries.Add("Files are the same");
+                    var indexDot = ruleString.LastIndexOf('.');
+                    var delta = ignore ? 1 : 0;
+                    string xpath;
+                    string keys;
+                    if (indexDot > 0)
+                    {
+                        xpath = ruleString.Substring(delta, indexDot - delta);
+                        keys = ruleString.Substring(indexDot + 1);
+                    }
                     else
-                        LogEntries.Add("Files are different");
+                    {
+                        xpath = ruleString.Substring(delta);
+                        keys = string.Empty;
+                    }
+
+                    if (!rules.ContainsKey(xpath))
+                        rules.Add(xpath, new List<ComparisonRule>());
+                    foreach (var key in keys.Split('|'))
+                        rules[xpath].Add(new ComparisonRule(key, ignore));
                 }
+
+                using (StreamReader reader = File.OpenText(File1Path))
+                {
+                    using (StreamReader reader2 = File.OpenText(File2Path))
+                    {
+                        var json1 = JToken.ReadFrom(new JsonTextReader(reader));
+                        var json2 = JToken.ReadFrom(new JsonTextReader(reader2));
+
+                        var comparer = new JTokenComparer(rules, LogEntries, IgnoreNullValues);
+                        if(comparer.Equals(json1, json2))
+                            LogEntries.Add("Files are the same");
+                        else
+                            LogEntries.Add("Files are different");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                MessageBox.Show(e.Message);
             }
 
 

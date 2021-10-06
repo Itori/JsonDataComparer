@@ -119,6 +119,10 @@ namespace JsonDataComparer.ViewModel
                         LogDiff(property1, property2);
 
                         break;
+                    case JValue value1:
+                        var value2 = token2 as JValue;
+                        return Equals(value1, value2);
+
                     default:
                         throw new NotImplementedException("Compare collections of something else then JObject");
 
@@ -197,6 +201,21 @@ namespace JsonDataComparer.ViewModel
                             LogDiff(property1, property2);
 
                             break;
+
+                        case JValue value1:
+                            var value2 = t2.OfType<JValue>().FirstOrDefault(v => Equals(v,value1));
+
+                            if (value2 != null)
+                            {
+                                t2.Remove(value2);
+                                continue;
+                            }
+
+                            equals = false;
+                            LogDiff(value1, null);
+
+                            break;
+
                         default:
                             throw new NotImplementedException("Compare collections of something else then JObject");
                     }
@@ -210,6 +229,10 @@ namespace JsonDataComparer.ViewModel
                         {
                             case JProperty property:
                                 if (Equals(null, property))
+                                    continue;
+                                break;
+                            case JValue value:
+                                if (Equals(null, value))
                                     continue;
                                 break;
                         }
